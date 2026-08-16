@@ -51,13 +51,18 @@ if [ "$MODEL" = "gemma3-1b" ]; then
     echo " https://huggingface.co/google/gemma-3-1b-it-qat-q4_0-gguf)"
     exit 1
   fi
-  if [ ! -f "gemma-3-1b-it-q4_0.gguf" ]; then
+  # -f 0-byte-or-missing check: a prior failed/interrupted download (e.g.
+  # a 401 before HF_TOKEN was set up) leaves an empty file behind, and a
+  # plain `[ ! -f ... ]` check would then wrongly skip re-downloading it.
+  if [ ! -s "gemma-3-1b-it-q4_0.gguf" ]; then
+    rm -f gemma-3-1b-it-q4_0.gguf
     wget --header="Authorization: Bearer $HF_TOKEN" \
       -O gemma-3-1b-it-q4_0.gguf \
       "https://huggingface.co/google/gemma-3-1b-it-qat-q4_0-gguf/resolve/main/gemma-3-1b-it-q4_0.gguf"
   fi
 elif [ "$MODEL" = "phi3" ]; then
-  if [ ! -f "Phi-3-mini-4k-instruct-q4.gguf" ]; then
+  if [ ! -s "Phi-3-mini-4k-instruct-q4.gguf" ]; then
+    rm -f Phi-3-mini-4k-instruct-q4.gguf
     wget -O Phi-3-mini-4k-instruct-q4.gguf \
       "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"
   fi

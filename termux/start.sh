@@ -29,8 +29,9 @@ fi
 SERVICE_API_KEY="${SERVICE_API_KEY:-sk-local-7a79296a92b11ca6bfef66a86afc1a39f67c59380af5fcfc}"
 PORT=8080
 
-if [ ! -f "$MODEL_PATH" ]; then
-  echo "Model not found at $MODEL_PATH — run setup.sh first (with the same MODEL=... value)."
+if [ ! -s "$MODEL_PATH" ]; then
+  echo "Model missing or empty at $MODEL_PATH — run setup.sh first (with the same MODEL=... value)."
+  echo "(An empty file usually means a previous download failed partway — delete it and re-run setup.sh.)"
   exit 1
 fi
 
