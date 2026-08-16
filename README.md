@@ -22,13 +22,15 @@ same way they'd call OpenAI or Anthropic's API.
 
 ## Layout
 
-| File | Purpose |
+| Path | Purpose |
 |---|---|
 | `app.py` | FastAPI service. `/v1/chat/completions` (OpenAI-compatible) + `/health`. |
 | `mcp_server.py` | MCP server exposing an `ask_local_model` tool that calls `app.py`. |
 | `requirements.txt` | Python dependencies. |
 | `.env.example` | Template for required environment variables. |
 | `Dockerfile` | Container image for the FastAPI service (Ollama runs separately). |
+| `huggingface/` | Variant for deploying to Hugging Face Spaces — bundles Ollama + `app.py` into one container. **Requires a paid Space (Docker SDK is not on HF's free tier as of this writing).** See `huggingface/README.md`. |
+| `termux/` | Variant for running the model directly on an Android phone via Termux + llama.cpp, with ngrok for public access. Genuinely free, but battery/background-kill tradeoffs apply. See `termux/README.md`. |
 
 ## Setup
 
@@ -61,6 +63,9 @@ same way they'd call OpenAI or Anthropic's API.
    }
    uvicorn app:app --host 0.0.0.0 --port 8000
    ```
+   > If port 8000 is already taken by something else on your machine
+   > (check with `netstat -ano | findstr :8000`), just pick a free one,
+   > e.g. `--port 8001`, and use that port in every example below.
 
 5. **Check it's alive:**
    ```
@@ -99,6 +104,57 @@ python mcp_server.py
 ```
 
 The exposed tool is `ask_local_model(prompt, model="phi3:mini")`.
+
+## Making it publicly reachable — free, via ngrok
+
+Pushing this repo to GitHub does **not** put the service on the internet
+(see above) — but you don't need a paid cloud host either. A free tunnel
+gives your already-running local service a public HTTPS URL, at the cost
+of only working while this machine and the tunnel process stay up.
+
+1. **Install ngrok** and authenticate once:
+   ```
+   ngrok config add-authtoken <YOUR_TOKEN>
+   ```
+   Get a free token from https://dashboard.ngrok.com/get-started/your-authtoken.
+
+2. **With the FastAPI service already running** (step 4 above), start a
+   tunnel pointed at the same port:
+   ```
+   ngrok http 8001
+   ```
+   ngrok prints a public URL, e.g.:
+   ```
+   url=https://bovine-cylinder-onboard.ngrok-free.dev
+   ```
+   This URL is **random and changes every time you restart ngrok**,
+   unless you claim a static free domain from the ngrok dashboard.
+
+3. **Verify end-to-end** (replace the URL and key with your own):
+   ```bash
+   curl https://bovine-cylinder-onboard.ngrok-free.dev/health
+
+   curl -X POST https://bovine-cylinder-onboard.ngrok-free.dev/v1/chat/completions \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer sk-local-..." \
+     -d '{"model":"phi3:mini","messages":[{"role":"user","content":"Say hello in 5 words."}],"max_tokens":30}'
+   ```
+
+4. **Point any client at the tunnel URL** the same way you would at
+   `localhost` — just swap `base_url`:
+   ```python
+   client = OpenAI(
+       api_key="sk-local-...",
+       base_url="https://bovine-cylinder-onboard.ngrok-free.dev/v1"
+   )
+   ```
+
+**Reality check:** this only works while Ollama, `app.py`, and `ngrok`
+are all running on this machine. Close the laptop or kill any of those
+three processes and the URL stops responding. For a setup that doesn't
+depend on a laptop staying on, see `termux/README.md` (runs the model on
+an Android phone instead) — with its own tradeoffs (battery drain,
+Android backgrounding the process unless configured not to).
 
 ## Deploying somewhere reachable (optional, beyond "push to GitHub")
 
