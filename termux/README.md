@@ -39,6 +39,21 @@ MODEL=phi3 bash start.sh
 
 ## Setup (run in Termux, on your phone)
 
+**Gemma's GGUF repo on Hugging Face is gated**, so you need a token before
+running setup:
+
+1. Visit https://huggingface.co/google/gemma-3-1b-it-qat-q4_0-gguf while
+   logged in and click **"Agree and access repository"** (one-time).
+2. Create a read token at https://huggingface.co/settings/tokens.
+3. Export it in Termux before running setup:
+   ```bash
+   export HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxx
+   ```
+
+Without this, `setup.sh` fails with `401 Unauthorized` when downloading
+the model. (If you use `MODEL=phi3` instead, Phi-3-mini's repo isn't
+gated, so `HF_TOKEN` isn't required in that case.)
+
 ```bash
 bash setup.sh
 ```
@@ -47,11 +62,20 @@ This installs build tools, compiles llama.cpp for your phone's ARM
 architecture, downloads the quantized model (**Gemma 3 1B, ~815MB, by
 default** — do this on Wi-Fi), and installs ngrok.
 
-Then add your ngrok authtoken (free — get it from
-https://dashboard.ngrok.com/get-started/your-authtoken):
+**ngrok runs inside an Ubuntu proot** (`proot-distro`), not directly in
+Termux — on some devices the plain Termux binary fails with
+`error: "ngrok" has unexpected e_type: 2` because ngrok's Linux build
+doesn't run reliably under Termux's Bionic/Android userland. `setup.sh`
+installs `proot-distro`, an Ubuntu rootfs, and ngrok inside it
+automatically. Ubuntu shares Termux's network namespace, so ngrok there
+can still reach `llama-server` on `127.0.0.1`.
+
+Add your ngrok authtoken (free — get it from
+https://dashboard.ngrok.com/get-started/your-authtoken) **inside the
+Ubuntu proot**:
 
 ```bash
-ngrok config add-authtoken <YOUR_TOKEN>
+proot-distro login ubuntu -- ngrok config add-authtoken <YOUR_TOKEN>
 ```
 
 ## Keeping it alive in the background

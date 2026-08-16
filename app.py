@@ -20,11 +20,20 @@ import uuid
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 API_KEY = os.environ.get("SERVICE_API_KEY")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "phi3:mini")
+
+# Comma-separated list of origins allowed to call this service directly
+# from a browser (e.g. a static site with no backend, like a GitHub Pages
+# portfolio). Not needed for server-to-server callers (e.g. an Express
+# backend) — CORS only applies to browser-originated requests.
+ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()
+]
 
 if not API_KEY:
     raise RuntimeError(
@@ -33,6 +42,14 @@ if not API_KEY:
     )
 
 app = FastAPI(title="Local Ollama Service", version="1.0.0")
+
+if ALLOWED_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=ALLOWED_ORIGINS,
+        allow_methods=["POST", "GET"],
+        allow_headers=["Content-Type", "Authorization"],
+    )
 
 
 class ChatMessage(BaseModel):

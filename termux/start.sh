@@ -57,4 +57,8 @@ echo "llama-server is ready (PID $LLAMA_PID)."
 echo "=== Starting ngrok tunnel with basic-auth protection ==="
 echo "(llama-server itself has no API key check, so ngrok's basic-auth"
 echo " is what protects this endpoint from being open to the internet.)"
-ngrok http "$PORT" --basic-auth="apikey:${SERVICE_API_KEY}" --log=stdout
+echo "(ngrok runs inside the Ubuntu proot — see setup.sh — since it can"
+echo " fail with 'unexpected e_type' when run directly under Termux."
+echo " Ubuntu shares Termux's network namespace, so 127.0.0.1:$PORT"
+echo " here reaches the llama-server we just started above.)"
+proot-distro login ubuntu -- ngrok http "$PORT" --basic-auth="apikey:${SERVICE_API_KEY}" --log=stdout
