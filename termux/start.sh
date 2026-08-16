@@ -13,12 +13,24 @@
 #   for Termux itself, or Android may still kill it after a while.
 set -e
 
-MODEL_PATH=~/models/Phi-3-mini-4k-instruct-q4.gguf
+# Default: Gemma 3 1B (~815MB, lighter and faster on phones). Set
+# MODEL=phi3 to use the larger phi-3-mini instead — must match whatever
+# you passed to setup.sh, e.g.:  MODEL=phi3 bash start.sh
+MODEL="${MODEL:-gemma3-1b}"
+if [ "$MODEL" = "gemma3-1b" ]; then
+  MODEL_PATH=~/models/gemma-3-1b-it-q4_0.gguf
+elif [ "$MODEL" = "phi3" ]; then
+  MODEL_PATH=~/models/Phi-3-mini-4k-instruct-q4.gguf
+else
+  echo "Unknown MODEL='$MODEL' — expected 'gemma3-1b' or 'phi3'"
+  exit 1
+fi
+
 SERVICE_API_KEY="${SERVICE_API_KEY:-sk-local-7a79296a92b11ca6bfef66a86afc1a39f67c59380af5fcfc}"
 PORT=8080
 
 if [ ! -f "$MODEL_PATH" ]; then
-  echo "Model not found at $MODEL_PATH — run setup.sh first."
+  echo "Model not found at $MODEL_PATH — run setup.sh first (with the same MODEL=... value)."
   exit 1
 fi
 

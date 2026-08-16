@@ -27,12 +27,28 @@ cd llama.cpp
 cmake -B build
 cmake --build build --config Release -j"$(nproc)"
 
-echo "=== Step 5: Download phi-3-mini GGUF (quantized, ~2.3GB) ==="
+echo "=== Step 5: Download model GGUF ==="
 mkdir -p ~/models
 cd ~/models
-if [ ! -f "Phi-3-mini-4k-instruct-q4.gguf" ]; then
-  wget -O Phi-3-mini-4k-instruct-q4.gguf \
-    "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"
+
+# Default: Gemma 3 1B (~815MB) — much lighter than phi3-mini, the
+# recommended choice for phones. Set MODEL=phi3 to pull the larger
+# phi-3-mini (~2.3GB) instead, e.g.:  MODEL=phi3 bash setup.sh
+MODEL="${MODEL:-gemma3-1b}"
+
+if [ "$MODEL" = "gemma3-1b" ]; then
+  if [ ! -f "gemma-3-1b-it-q4_0.gguf" ]; then
+    wget -O gemma-3-1b-it-q4_0.gguf \
+      "https://huggingface.co/google/gemma-3-1b-it-qat-q4_0-gguf/resolve/main/gemma-3-1b-it-q4_0.gguf"
+  fi
+elif [ "$MODEL" = "phi3" ]; then
+  if [ ! -f "Phi-3-mini-4k-instruct-q4.gguf" ]; then
+    wget -O Phi-3-mini-4k-instruct-q4.gguf \
+      "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"
+  fi
+else
+  echo "Unknown MODEL='$MODEL' — expected 'gemma3-1b' or 'phi3'"
+  exit 1
 fi
 
 echo "=== Step 6: Install ngrok ==="

@@ -2,16 +2,31 @@
 
 This is a genuinely different setup from the laptop version — it runs
 `llama.cpp` (not Ollama, which doesn't officially support Android) inside
-Termux, with a quantized Phi-3-mini GGUF model, exposed via ngrok.
+Termux, with a quantized GGUF model, exposed via ngrok.
+
+## Which model?
+
+| Model | Size | Notes |
+|---|---|---|
+| **Gemma 3 1B** (default) | ~815 MB | Recommended for phones — noticeably lighter on RAM, storage, and battery than phi-3-mini, still capable for RAG-style Q&A. |
+| Phi-3-mini | ~2.3 GB | Larger, more capable, but meaningfully heavier to run on a phone. Use only if Gemma 3 1B's quality isn't enough for your use case. |
+
+Both `setup.sh` and `start.sh` default to Gemma 3 1B. To use Phi-3-mini
+instead, pass `MODEL=phi3` to both:
+
+```bash
+MODEL=phi3 bash setup.sh
+MODEL=phi3 bash start.sh
+```
 
 ## Read this before you start
 
 - **Install Termux from F-Droid or GitHub releases — not the Play Store
   version** (outdated, broken). You said you already have it installed;
   double check it's the maintained build.
-- **This will use real battery and generate heat.** Running a ~4GB model
-  continuously is genuinely demanding for a phone. Expect noticeably
-  faster battery drain while it's active.
+- **This will use real battery and generate heat**, though noticeably
+  less with Gemma 3 1B than with the larger Phi-3-mini. Expect faster
+  battery drain than idle either way while the model is active.
 - **Android WILL try to kill this in the background** unless you take
   the wake-lock and battery-optimization steps below. This is the
   biggest practical risk to "always on."
@@ -29,8 +44,8 @@ bash setup.sh
 ```
 
 This installs build tools, compiles llama.cpp for your phone's ARM
-architecture, downloads the quantized Phi-3-mini model (~2.3GB — do this
-on Wi-Fi), and installs ngrok.
+architecture, downloads the quantized model (**Gemma 3 1B, ~815MB, by
+default** — do this on Wi-Fi), and installs ngrok.
 
 Then add your ngrok authtoken (free — get it from
 https://dashboard.ngrok.com/get-started/your-authtoken):
@@ -85,7 +100,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="phi3-mini",  # llama-server ignores the model name (only one loaded)
+    model="gemma3-1b",  # llama-server ignores the model name (only one loaded)
     messages=[{"role": "user", "content": "What is RAG?"}],
 )
 print(response.choices[0].message.content)

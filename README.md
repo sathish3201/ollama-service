@@ -30,7 +30,7 @@ same way they'd call OpenAI or Anthropic's API.
 | `.env.example` | Template for required environment variables. |
 | `Dockerfile` | Container image for the FastAPI service (Ollama runs separately). |
 | `huggingface/` | Variant for deploying to Hugging Face Spaces — bundles Ollama + `app.py` into one container. **Requires a paid Space (Docker SDK is not on HF's free tier as of this writing).** See `huggingface/README.md`. |
-| `termux/` | Variant for running the model directly on an Android phone via Termux + llama.cpp, with ngrok for public access. Genuinely free, but battery/background-kill tradeoffs apply. See `termux/README.md`. |
+| `termux/` | Variant for running the model directly on an Android phone via Termux + llama.cpp, with ngrok for public access. Defaults to Gemma 3 1B (~815MB) — lighter on phone hardware than phi3:mini; Phi-3-mini is available via `MODEL=phi3`. Genuinely free, but battery/background-kill tradeoffs apply. See `termux/README.md`. |
 
 ## Setup
 
