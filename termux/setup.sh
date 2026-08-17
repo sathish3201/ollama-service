@@ -38,8 +38,15 @@ echo "=== Step 3b: Install Python + FastAPI (for the caching proxy) ==="
 # pip is forbidden, this will break the python-pip package"), since pkg
 # manages that version deliberately. The pinned version is fine for
 # installing fastapi/uvicorn/httpx.
+#
+# Plain `uvicorn`, not `uvicorn[standard]`: the [standard] extra pulls
+# in watchfiles (used only for --reload, which start.sh never passes),
+# and watchfiles needs a Rust toolchain targeting aarch64-linux-android
+# to build from source — not available in Termux, and the build fails
+# ("Target triple not supported by rustup"). Plain uvicorn has no such
+# dependency and is all a non-reloading `uvicorn cache_proxy:app` needs.
 pkg install -y python
-pip install fastapi "uvicorn[standard]" httpx --break-system-packages
+pip install fastapi uvicorn httpx --break-system-packages
 
 echo "=== Step 4: Clone and build llama.cpp ==="
 cd ~
