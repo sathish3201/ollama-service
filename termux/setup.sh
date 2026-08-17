@@ -23,6 +23,13 @@ pkg install -y ffmpeg poppler
 echo "=== Step 3: Grant storage access (needed to save the model file) ==="
 termux-setup-storage || true
 
+echo "=== Step 3b: Install Python + FastAPI (for the caching proxy) ==="
+# cache_proxy.py sits in front of llama-server and caches responses in
+# SQLite so repeated questions/images don't re-run inference.
+pkg install -y python
+pip install --upgrade pip
+pip install fastapi "uvicorn[standard]" httpx
+
 echo "=== Step 4: Clone and build llama.cpp ==="
 cd ~
 if [ ! -d "llama.cpp" ]; then

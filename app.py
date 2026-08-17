@@ -14,7 +14,10 @@ This process must run on a machine that also has Ollama running
 pulled (e.g. ``ollama pull phi3:mini``).
 """
 
+import hashlib
+import json
 import os
+import sqlite3
 import time
 import uuid
 
@@ -22,10 +25,75 @@ import httpx
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 API_KEY = os.environ.get("SERVICE_API_KEY")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "phi3:mini")
+
+# Response cache: identical requests (same model/messages/temperature/max_tokens)
+# are served from disk instead of re-running inference. Persists across
+# restarts (SQLite file), since the phone backend restarts often (battery
+# kills, manual restarts). Set CACHE_ENABLED=false to disable.
+CACHE_ENABLED = os.environ.get("CACHE_ENABLED", "true").lower() != "false"
+CACHE_PATH = os.environ.get("CACHE_PATH", "cache.sqlite3")
+
+
+def _init_cache_db() -> None:
+    conn = sqlite3.connect(CACHE_PATH)
+    # WAL mode lets a read (cache lookup) proceed without blocking on a
+    # concurrent write (cache write from another request) — matters here
+    # since multiple chat requests can be in flight at once.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS response_cache (
+            cache_key TEXT PRIMARY KEY,
+            response_json TEXT NOT NULL,
+            created_at REAL NOT NULL
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+def _cache_key(body: "ChatCompletionRequest") -> str:
+    payload = {
+        "model": body.model,
+        "messages": [m.model_dump() for m in body.messages],
+        "temperature": body.temperature,
+        "max_tokens": body.max_tokens,
+    }
+    canonical = json.dumps(payload, sort_keys=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _cache_get(cache_key: str) -> dict | None:
+    if not CACHE_ENABLED:
+        return None
+    conn = sqlite3.connect(CACHE_PATH)
+    row = conn.execute(
+        "SELECT response_json FROM response_cache WHERE cache_key = ?", (cache_key,)
+    ).fetchone()
+    conn.close()
+    return json.loads(row[0]) if row else None
+
+
+def _cache_put(cache_key: str, response: dict) -> None:
+    if not CACHE_ENABLED:
+        return
+    conn = sqlite3.connect(CACHE_PATH)
+    conn.execute(
+        "INSERT OR REPLACE INTO response_cache (cache_key, response_json, created_at) VALUES (?, ?, ?)",
+        (cache_key, json.dumps(response), time.time()),
+    )
+    conn.commit()
+    conn.close()
+
+
+if CACHE_ENABLED:
+    _init_cache_db()
 
 # Comma-separated list of origins allowed to call this service directly
 # from a browser (e.g. a static site with no backend, like a GitHub Pages
@@ -95,6 +163,11 @@ async def chat_completions(
     """OpenAI-compatible chat completions endpoint, backed by local Ollama."""
     _check_api_key(authorization)
 
+    cache_key = _cache_key(body)
+    cached = await run_in_threadpool(_cache_get, cache_key)
+    if cached is not None:
+        return cached
+
     ollama_payload = {
         "model": body.model,
         "messages": [m.model_dump() for m in body.messages],
@@ -116,7 +189,7 @@ async def chat_completions(
 
     # Shape the response like the OpenAI SDK expects, so
     # `response.choices[0].message.content` keeps working unchanged.
-    return {
+    result = {
         "id": f"chatcmpl-{uuid.uuid4().hex}",
         "object": "chat.completion",
         "created": int(time.time()),
@@ -134,3 +207,11 @@ async def chat_completions(
             "total_tokens": data.get("prompt_eval_count", 0) + data.get("eval_count", 0),
         },
     }
+
+    # Only cache real answers — an empty completion (e.g. the model
+    # emitting an early stop token on some prompts) shouldn't get
+    # permanently cached as "the" answer to that question.
+    if answer:
+        await run_in_threadpool(_cache_put, cache_key, result)
+
+    return result

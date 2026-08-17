@@ -32,7 +32,8 @@ else
 fi
 
 SERVICE_API_KEY="${SERVICE_API_KEY:-sk-local-7a79296a92b11ca6bfef66a86afc1a39f67c59380af5fcfc}"
-PORT=8080
+LLAMA_PORT=8080
+PROXY_PORT=8081
 
 if [ ! -s "$MODEL_PATH" ]; then
   echo "Model missing or empty at $MODEL_PATH — run setup.sh first (with the same MODEL=... value)."
@@ -44,7 +45,7 @@ if [ -n "$MMPROJ_PATH" ] && [ ! -s "$MMPROJ_PATH" ]; then
   exit 1
 fi
 
-echo "=== Starting llama.cpp server on port $PORT ==="
+echo "=== Starting llama.cpp server on port $LLAMA_PORT (internal only) ==="
 echo "(This exposes an OpenAI-compatible /v1/chat/completions endpoint."
 echo " --api-key makes llama-server check for 'Authorization: Bearer"
 echo " <key>' itself, matching the laptop/FastAPI setup — so both"
@@ -56,7 +57,7 @@ if [ -n "$MMPROJ_PATH" ]; then
   ./build/bin/llama-server \
     -m "$MODEL_PATH" \
     --mmproj "$MMPROJ_PATH" \
-    --port "$PORT" \
+    --port "$LLAMA_PORT" \
     --host 0.0.0.0 \
     -c 4096 \
     --parallel 1 \
@@ -65,7 +66,7 @@ if [ -n "$MMPROJ_PATH" ]; then
 else
   ./build/bin/llama-server \
     -m "$MODEL_PATH" \
-    --port "$PORT" \
+    --port "$LLAMA_PORT" \
     --host 0.0.0.0 \
     -c 4096 \
     --parallel 1 \
@@ -75,16 +76,35 @@ fi
 LLAMA_PID=$!
 
 echo "Waiting for llama-server to be ready..."
-until curl -s "http://localhost:$PORT/health" > /dev/null 2>&1; do
+until curl -s "http://localhost:$LLAMA_PORT/health" > /dev/null 2>&1; do
   sleep 1
 done
 echo "llama-server is ready (PID $LLAMA_PID)."
 
+echo "=== Starting caching proxy on port $PROXY_PORT ==="
+echo "(Repeated questions/images are served from cache.sqlite3 instead"
+echo " of re-running inference — see termux/cache_proxy.py. ngrok points"
+echo " at THIS proxy, not llama-server directly, so caching applies to"
+echo " every request from the tunnel.)"
+
+cd ~/ollama-service/termux
+LLAMA_SERVER_URL="http://127.0.0.1:$LLAMA_PORT" python -m uvicorn cache_proxy:app \
+  --host 0.0.0.0 \
+  --port "$PROXY_PORT" \
+  &
+PROXY_PID=$!
+
+echo "Waiting for cache proxy to be ready..."
+until curl -s "http://localhost:$PROXY_PORT/health" > /dev/null 2>&1; do
+  sleep 1
+done
+echo "Cache proxy is ready (PID $PROXY_PID)."
+
 echo "=== Starting ngrok tunnel ==="
-echo "(No ngrok-side auth needed anymore — llama-server's --api-key"
-echo " above now enforces Bearer auth itself.)"
+echo "(No ngrok-side auth needed — llama-server's --api-key is checked"
+echo " when the proxy forwards a cache-miss request through to it.)"
 echo "(ngrok runs inside the Ubuntu proot — see setup.sh — since it can"
 echo " fail with 'unexpected e_type' when run directly under Termux."
-echo " Ubuntu shares Termux's network namespace, so 127.0.0.1:$PORT"
-echo " here reaches the llama-server we just started above.)"
-proot-distro login ubuntu -- ngrok http "$PORT" --log=stdout
+echo " Ubuntu shares Termux's network namespace, so 127.0.0.1:$PROXY_PORT"
+echo " here reaches the cache proxy we just started above.)"
+proot-distro login ubuntu -- ngrok http "$PROXY_PORT" --log=stdout

@@ -109,9 +109,11 @@ minutes of screen-off time.
 bash start.sh
 ```
 
-This starts `llama-server` on port 8080 (with `--api-key` enforcing
-Bearer auth itself), then opens an ngrok tunnel pointed at it. Watch
-the output for a line like:
+This starts `llama-server` on port 8080 (internal only, `--api-key`
+enforcing Bearer auth), then a caching proxy on port 8081
+(`cache_proxy.py` — see "Response caching" below), then opens an
+ngrok tunnel pointed at the **proxy**, not llama-server directly.
+Watch the output for a line like:
 
 ```
 url=https://something-random.ngrok-free.dev
@@ -190,6 +192,26 @@ image well; feeding it many at once will strain the RAM budget). To
 summarize a whole document/video, ask it to summarize each
 page/frame individually, then feed those summaries back into the model
 as plain text for a final combined summary.
+
+## Response caching
+
+Repeated questions (or the same image sent twice) don't re-run
+inference — `cache_proxy.py` sits between ngrok and llama-server,
+checks a local SQLite cache (`cache.sqlite3`, next to `cache_proxy.py`)
+for an identical request first, and only forwards to llama-server on a
+miss. Images are covered automatically: they're embedded as base64
+inside `messages`, so an identical image produces an identical cache
+key without any special-casing.
+
+What counts as "identical": same `model`, `messages` (including any
+embedded images), `temperature`, and `max_tokens` — change any of
+those and it's a fresh request. A cache hit responds instantly, is
+free (no battery/heat from inference), and bypasses `--parallel 1`'s
+single-request-at-a-time limit entirely.
+
+To disable caching, export `CACHE_ENABLED=false` before `bash start.sh`.
+To clear the cache, delete `termux/cache.sqlite3` while the proxy isn't
+running.
 
 ## Running the laptop and phone at the same time
 
