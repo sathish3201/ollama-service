@@ -40,12 +40,13 @@ option at that budget.
 - **Android WILL try to kill this in the background** unless you take
   the wake-lock and battery-optimization steps below. This is the
   biggest practical risk to "always on."
-- **Auth is different here than on the laptop setup.** `llama-server`
-  (llama.cpp's built-in OpenAI-compatible server) has **no API key
-  check of its own** — so this setup uses ngrok's `--basic-auth` flag
-  instead. Clients authenticate with **HTTP Basic Auth**
-  (`username:apikey`, `password:<your key>`), not a `Bearer` token like
-  the FastAPI/laptop version used.
+- **Auth now matches the laptop setup.** `llama-server` is started with
+  `--api-key`, so it checks `Authorization: Bearer <key>` itself —
+  same scheme as the FastAPI/laptop version. This means a single
+  `LOCAL_MODEL_API_KEY` works for whichever backend (laptop or phone)
+  is currently running, with no scheme mismatch. (Earlier versions of
+  this setup used ngrok's `--basic-auth` instead — if you're still on
+  that, `git pull` and re-run `start.sh`.)
 
 ## Setup (run in Termux, on your phone)
 
@@ -108,8 +109,9 @@ minutes of screen-off time.
 bash start.sh
 ```
 
-This starts `llama-server` on port 8080, then opens an ngrok tunnel with
-basic-auth protection. Watch the output for a line like:
+This starts `llama-server` on port 8080 (with `--api-key` enforcing
+Bearer auth itself), then opens an ngrok tunnel pointed at it. Watch
+the output for a line like:
 
 ```
 url=https://something-random.ngrok-free.dev
@@ -120,17 +122,14 @@ claim a static free domain.
 
 ## Calling it from your notebook / any client
 
-Because auth is HTTP Basic (not Bearer) here, the `OpenAI()` client needs
-a small adjustment vs. the laptop version:
+Same `Bearer` auth as the laptop version — no client-side adjustment needed:
 
 ```python
 from openai import OpenAI
-import httpx
 
 client = OpenAI(
-    api_key="unused",  # llama-server doesn't check this field itself
+    api_key="sk-local-...",  # same SERVICE_API_KEY value, sent as Bearer
     base_url="https://your-phone-tunnel.ngrok-free.dev/v1",
-    http_client=httpx.Client(auth=("apikey", "sk-local-...")),  # HTTP Basic Auth
 )
 
 response = client.chat.completions.create(
@@ -179,7 +178,7 @@ print(json.dumps({
     }]
 }))" > /tmp/req.json
 
-curl -s -u apikey:sk-local-... \
+curl -s -H "Authorization: Bearer sk-local-..." \
   http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d @/tmp/req.json

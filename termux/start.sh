@@ -45,9 +45,11 @@ if [ -n "$MMPROJ_PATH" ] && [ ! -s "$MMPROJ_PATH" ]; then
 fi
 
 echo "=== Starting llama.cpp server on port $PORT ==="
-echo "(This exposes an OpenAI-compatible /v1/chat/completions endpoint,"
-echo " but llama-server has NO built-in API key check — that's what"
-echo " the ngrok basic-auth flag below adds.)"
+echo "(This exposes an OpenAI-compatible /v1/chat/completions endpoint."
+echo " --api-key makes llama-server check for 'Authorization: Bearer"
+echo " <key>' itself, matching the laptop/FastAPI setup — so both"
+echo " backends can share the same auth scheme and the same LOCAL_MODEL_*"
+echo " env vars on Render, regardless of which one is currently up.)"
 
 cd ~/llama.cpp
 if [ -n "$MMPROJ_PATH" ]; then
@@ -58,6 +60,7 @@ if [ -n "$MMPROJ_PATH" ]; then
     --host 0.0.0.0 \
     -c 4096 \
     --parallel 1 \
+    --api-key "$SERVICE_API_KEY" \
     &
 else
   ./build/bin/llama-server \
@@ -66,6 +69,7 @@ else
     --host 0.0.0.0 \
     -c 4096 \
     --parallel 1 \
+    --api-key "$SERVICE_API_KEY" \
     &
 fi
 LLAMA_PID=$!
@@ -76,11 +80,11 @@ until curl -s "http://localhost:$PORT/health" > /dev/null 2>&1; do
 done
 echo "llama-server is ready (PID $LLAMA_PID)."
 
-echo "=== Starting ngrok tunnel with basic-auth protection ==="
-echo "(llama-server itself has no API key check, so ngrok's basic-auth"
-echo " is what protects this endpoint from being open to the internet.)"
+echo "=== Starting ngrok tunnel ==="
+echo "(No ngrok-side auth needed anymore — llama-server's --api-key"
+echo " above now enforces Bearer auth itself.)"
 echo "(ngrok runs inside the Ubuntu proot — see setup.sh — since it can"
 echo " fail with 'unexpected e_type' when run directly under Termux."
 echo " Ubuntu shares Termux's network namespace, so 127.0.0.1:$PORT"
 echo " here reaches the llama-server we just started above.)"
-proot-distro login ubuntu -- ngrok http "$PORT" --basic-auth="apikey:${SERVICE_API_KEY}" --log=stdout
+proot-distro login ubuntu -- ngrok http "$PORT" --log=stdout
