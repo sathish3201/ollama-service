@@ -15,6 +15,13 @@ this proxy forwards the Authorization header through unchanged rather
 than re-implementing the check, so start.sh's existing SERVICE_API_KEY
 flow doesn't need to change.
 
+Built on Starlette directly rather than FastAPI: FastAPI requires
+pydantic v2, which needs pydantic-core, a Rust extension with no
+prebuilt wheel for Termux's aarch64-linux-android target — pip tries
+to compile it from source and fails (no working Rust-for-Android
+toolchain in Termux). Starlette is what FastAPI itself is built on,
+has no pydantic dependency at all, and is enough for two simple routes.
+
 Run:
     uvicorn cache_proxy:app --host 0.0.0.0 --port 8081
 
@@ -29,9 +36,10 @@ import sqlite3
 import time
 
 import httpx
-from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import JSONResponse
+from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
+from starlette.responses import JSONResponse
+from starlette.routing import Route
 
 LLAMA_SERVER_URL = os.environ.get("LLAMA_SERVER_URL", "http://127.0.0.1:8080")
 
@@ -97,27 +105,21 @@ def _cache_put(cache_key: str, response: dict) -> None:
 if CACHE_ENABLED:
     _init_cache_db()
 
-app = FastAPI(title="llama-server caching proxy", version="1.0.0")
 
-
-@app.get("/health")
-async def health():
+async def health(request):
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{LLAMA_SERVER_URL}/health")
             resp.raise_for_status()
-        return {"status": "ok", "llama_server_reachable": True, "cache_enabled": CACHE_ENABLED}
+        return JSONResponse({"status": "ok", "llama_server_reachable": True, "cache_enabled": CACHE_ENABLED})
     except httpx.HTTPError:
-        return {"status": "degraded", "llama_server_reachable": False, "cache_enabled": CACHE_ENABLED}
+        return JSONResponse({"status": "degraded", "llama_server_reachable": False, "cache_enabled": CACHE_ENABLED})
 
 
-@app.post("/v1/chat/completions")
-async def chat_completions(
-    request: Request,
-    authorization: str | None = Header(default=None),
-):
+async def chat_completions(request):
     """Checks the cache, then forwards to llama-server on a miss (which does its own --api-key check)."""
     body = await request.json()
+    authorization = request.headers.get("authorization")
 
     cache_key = await run_in_threadpool(_cache_key, body)
     cached = await run_in_threadpool(_cache_get, cache_key)
@@ -132,7 +134,7 @@ async def chat_completions(
                 headers={"Authorization": authorization} if authorization else {},
             )
         except httpx.HTTPError as exc:
-            raise HTTPException(status_code=502, detail=f"llama-server request failed: {exc}") from exc
+            return JSONResponse({"error": f"llama-server request failed: {exc}"}, status_code=502)
 
     if resp.status_code != 200:
         # Pass through llama-server's own error (401 from a bad key,
@@ -149,3 +151,11 @@ async def chat_completions(
         await run_in_threadpool(_cache_put, cache_key, result)
 
     return JSONResponse(result, headers={"X-Cache": "MISS"})
+
+
+app = Starlette(
+    routes=[
+        Route("/health", health, methods=["GET"]),
+        Route("/v1/chat/completions", chat_completions, methods=["POST"]),
+    ]
+)

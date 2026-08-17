@@ -23,7 +23,7 @@ pkg install -y ffmpeg poppler
 echo "=== Step 3: Grant storage access (needed to save the model file) ==="
 termux-setup-storage || true
 
-echo "=== Step 3b: Install Python + FastAPI (for the caching proxy) ==="
+echo "=== Step 3b: Install Python + Starlette (for the caching proxy) ==="
 # cache_proxy.py sits in front of llama-server and caches responses in
 # SQLite so repeated questions/images don't re-run inference.
 #
@@ -36,17 +36,22 @@ echo "=== Step 3b: Install Python + FastAPI (for the caching proxy) ==="
 # Deliberately NOT running `pip install --upgrade pip` — Termux's
 # python-pip package is patched to refuse upgrading itself ("Installing
 # pip is forbidden, this will break the python-pip package"), since pkg
-# manages that version deliberately. The pinned version is fine for
-# installing fastapi/uvicorn/httpx.
+# manages that version deliberately. The pinned version installs the
+# packages below fine.
+#
+# Starlette, not FastAPI: FastAPI requires pydantic v2, which needs
+# pydantic-core — a Rust extension with no prebuilt wheel for Termux's
+# aarch64-linux-android target, so pip tries to compile it from source
+# and fails (no working Rust-for-Android toolchain in Termux). Starlette
+# is what FastAPI itself is built on, has no pydantic dependency, and is
+# enough for cache_proxy.py's two simple routes.
 #
 # Plain `uvicorn`, not `uvicorn[standard]`: the [standard] extra pulls
 # in watchfiles (used only for --reload, which start.sh never passes),
-# and watchfiles needs a Rust toolchain targeting aarch64-linux-android
-# to build from source — not available in Termux, and the build fails
-# ("Target triple not supported by rustup"). Plain uvicorn has no such
+# which has the same Rust/Termux problem. Plain uvicorn has no such
 # dependency and is all a non-reloading `uvicorn cache_proxy:app` needs.
 pkg install -y python
-pip install fastapi uvicorn httpx --break-system-packages
+pip install starlette uvicorn httpx --break-system-packages
 
 echo "=== Step 4: Clone and build llama.cpp ==="
 cd ~
