@@ -57,6 +57,7 @@ if [ -n "$MMPROJ_PATH" ]; then
     --port "$PORT" \
     --host 0.0.0.0 \
     -c 4096 \
+    --parallel 1 \
     &
 else
   ./build/bin/llama-server \
@@ -64,6 +65,7 @@ else
     --port "$PORT" \
     --host 0.0.0.0 \
     -c 4096 \
+    --parallel 1 \
     &
 fi
 LLAMA_PID=$!
