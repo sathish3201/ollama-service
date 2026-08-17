@@ -28,13 +28,17 @@ echo "=== Step 3b: Install Python + FastAPI (for the caching proxy) ==="
 # SQLite so repeated questions/images don't re-run inference.
 #
 # --break-system-packages: Termux's Python is "externally managed"
-# (PEP 668), so plain `pip install` refuses to run at all ("installing
-# pip is forbidden" / "externally-managed-environment"). This isn't a
+# (PEP 668), so plain `pip install` refuses to run at all. This isn't a
 # real conflict risk here the way it would be on a desktop Linux distro
 # sharing Python with OS tooling — Termux's pkg-managed Python packages
 # and pip packages don't collide in practice for something like this.
+#
+# Deliberately NOT running `pip install --upgrade pip` — Termux's
+# python-pip package is patched to refuse upgrading itself ("Installing
+# pip is forbidden, this will break the python-pip package"), since pkg
+# manages that version deliberately. The pinned version is fine for
+# installing fastapi/uvicorn/httpx.
 pkg install -y python
-pip install --upgrade pip --break-system-packages
 pip install fastapi "uvicorn[standard]" httpx --break-system-packages
 
 echo "=== Step 4: Clone and build llama.cpp ==="
