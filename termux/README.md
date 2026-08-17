@@ -6,18 +6,28 @@ Termux, with a quantized GGUF model, exposed via ngrok.
 
 ## Which model?
 
-| Model | Size | Notes |
-|---|---|---|
-| **Gemma 3 1B** (default) | ~815 MB | Recommended for phones — noticeably lighter on RAM, storage, and battery than phi-3-mini, still capable for RAG-style Q&A. |
-| Phi-3-mini | ~2.3 GB | Larger, more capable, but meaningfully heavier to run on a phone. Use only if Gemma 3 1B's quality isn't enough for your use case. |
+| Model | Size | Multimodal? | Notes |
+|---|---|---|---|
+| **Gemma 3 1B** (default) | ~815 MB | No (text-only) | Recommended for phones — noticeably lighter on RAM, storage, and battery, still capable for RAG-style Q&A. |
+| Phi-3-mini | ~2.3 GB | No (text-only) | Larger, more capable, but meaningfully heavier to run on a phone. |
+| SmolVLM2-500M | ~546 MB | **Yes** (image + video frames) | The multimodal option that actually fits a 4GB-RAM phone. Ungated — no HF token needed. See "Multimodal: images, video, and PDFs" below. |
 
-Both `setup.sh` and `start.sh` default to Gemma 3 1B. To use Phi-3-mini
-instead, pass `MODEL=phi3` to both:
+Pass `MODEL=phi3` or `MODEL=smolvlm2` to both scripts to switch (must match
+between `setup.sh` and `start.sh`):
 
 ```bash
 MODEL=phi3 bash setup.sh
 MODEL=phi3 bash start.sh
+
+# or:
+MODEL=smolvlm2 bash setup.sh
+MODEL=smolvlm2 bash start.sh
 ```
+
+**Gemma 3 4B and other larger vision models are not included here** —
+they need ~4GB of download and ~5GB of RAM at runtime, which doesn't fit
+a phone with 4GB RAM or less. SmolVLM2-500M is the realistic multimodal
+option at that budget.
 
 ## Read this before you start
 
@@ -129,6 +139,58 @@ response = client.chat.completions.create(
 )
 print(response.choices[0].message.content)
 ```
+
+## Multimodal: images, video, and PDFs (MODEL=smolvlm2)
+
+SmolVLM2-500M understands **images** (and video frames, since it's the
+"Video-Instruct" variant) — it does not read raw video files or PDFs
+directly. Nothing in the llama.cpp / GGUF ecosystem does that today.
+The trick is turning video/PDF into images first, then sending those.
+
+`setup.sh` installs `ffmpeg` and `poppler` (for `pdftoppm`) for exactly
+this.
+
+**PDF → images:**
+```bash
+pdftoppm -jpeg -r 150 document.pdf page
+# produces page-1.jpg, page-2.jpg, ...
+```
+
+**Video → frames:** (grab one frame every 2 seconds, adjust `fps` as needed)
+```bash
+ffmpeg -i video.mp4 -vf fps=1/2 frame-%03d.jpg
+```
+
+**Sending an image to the model** — base64-encode it and send as an
+`image_url` content block in the OpenAI-compatible chat endpoint:
+
+```bash
+python3 -c "
+import base64, json
+img = base64.b64encode(open('page-1.jpg','rb').read()).decode()
+print(json.dumps({
+    'model': 'smolvlm2',
+    'messages': [{
+        'role': 'user',
+        'content': [
+            {'type': 'image_url', 'image_url': {'url': f'data:image/jpeg;base64,{img}'}},
+            {'type': 'text', 'text': 'Summarize this page.'}
+        ]
+    }]
+}))" > /tmp/req.json
+
+curl -s -u apikey:sk-local-... \
+  http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d @/tmp/req.json
+```
+
+For a multi-page PDF or multi-frame video, loop over the extracted
+images and call the endpoint once per image (SmolVLM2-500M handles one
+image well; feeding it many at once will strain the RAM budget). To
+summarize a whole document/video, ask it to summarize each
+page/frame individually, then feed those summaries back into the model
+as plain text for a final combined summary.
 
 ## Running the laptop and phone at the same time
 

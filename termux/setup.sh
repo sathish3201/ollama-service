@@ -15,6 +15,11 @@ pkg update -y && pkg upgrade -y
 echo "=== Step 2: Install build tools + git + cmake + wget ==="
 pkg install -y git cmake golang wget clang make
 
+echo "=== Step 2b: Install ffmpeg + poppler (for video/PDF -> image preprocessing) ==="
+# Vision models here only understand images. To "read" a video or PDF,
+# extract frames/pages as images first (see README) and send those.
+pkg install -y ffmpeg poppler
+
 echo "=== Step 3: Grant storage access (needed to save the model file) ==="
 termux-setup-storage || true
 
@@ -31,9 +36,10 @@ echo "=== Step 5: Download model GGUF ==="
 mkdir -p ~/models
 cd ~/models
 
-# Default: Gemma 3 1B (~815MB) — much lighter than phi3-mini, the
-# recommended choice for phones. Set MODEL=phi3 to pull the larger
-# phi-3-mini (~2.3GB) instead, e.g.:  MODEL=phi3 bash setup.sh
+# Default: Gemma 3 1B (~815MB, text-only) — lightest option. Set MODEL=phi3
+# for the larger phi-3-mini (~2.3GB, text-only), or MODEL=smolvlm2 for a
+# small multimodal (image+video-frame) model (~546MB total, ungated),
+# e.g.:  MODEL=smolvlm2 bash setup.sh
 MODEL="${MODEL:-gemma3-1b}"
 
 if [ "$MODEL" = "gemma3-1b" ]; then
@@ -66,8 +72,23 @@ elif [ "$MODEL" = "phi3" ]; then
     wget -O Phi-3-mini-4k-instruct-q4.gguf \
       "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"
   fi
+elif [ "$MODEL" = "smolvlm2" ]; then
+  # SmolVLM2-500M: multimodal (image + video-frame) vision-language model.
+  # Ungated, no HF_TOKEN needed. ~437MB main weights + ~109MB mmproj
+  # (vision projector) = ~546MB total — the only multimodal option here
+  # realistic on a phone with 4GB RAM or less.
+  if [ ! -s "SmolVLM2-500M-Video-Instruct-Q8_0.gguf" ]; then
+    rm -f SmolVLM2-500M-Video-Instruct-Q8_0.gguf
+    wget -O SmolVLM2-500M-Video-Instruct-Q8_0.gguf \
+      "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+  fi
+  if [ ! -s "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf" ]; then
+    rm -f mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf
+    wget -O mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf \
+      "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+  fi
 else
-  echo "Unknown MODEL='$MODEL' — expected 'gemma3-1b' or 'phi3'"
+  echo "Unknown MODEL='$MODEL' — expected 'gemma3-1b', 'phi3', or 'smolvlm2'"
   exit 1
 fi
 
