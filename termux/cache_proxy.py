@@ -79,6 +79,12 @@ def _cache_key(body: dict) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _embeddings_cache_key(body: dict) -> str:
+    payload = {"model": body.get("model"), "input": body.get("input")}
+    canonical = json.dumps(payload, sort_keys=True)
+    return hashlib.sha256(("embeddings:" + canonical).encode("utf-8")).hexdigest()
+
+
 def _cache_get(cache_key: str) -> dict | None:
     if not CACHE_ENABLED:
         return None
@@ -153,9 +159,43 @@ async def chat_completions(request):
     return JSONResponse(result, headers={"X-Cache": "MISS"})
 
 
+async def embeddings(request):
+    """Passthrough to llama-server's own /v1/embeddings, cached the same
+    way as chat_completions. Requires llama-server to currently have an
+    embedding-capable GGUF loaded (a chat model like gemma-3-1b-it will
+    not serve this route usefully) — llama-server itself returns an
+    error in that case, which is passed through unchanged below."""
+    body = await request.json()
+    authorization = request.headers.get("authorization")
+
+    cache_key = await run_in_threadpool(_embeddings_cache_key, body)
+    cached = await run_in_threadpool(_cache_get, cache_key)
+    if cached is not None:
+        return JSONResponse(cached, headers={"X-Cache": "HIT"})
+
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        try:
+            resp = await client.post(
+                f"{LLAMA_SERVER_URL}/v1/embeddings",
+                json=body,
+                headers={"Authorization": authorization} if authorization else {},
+            )
+        except httpx.HTTPError as exc:
+            return JSONResponse({"error": f"llama-server request failed: {exc}"}, status_code=502)
+
+    if resp.status_code != 200:
+        return JSONResponse(resp.json() if resp.content else {}, status_code=resp.status_code)
+
+    result = resp.json()
+    await run_in_threadpool(_cache_put, cache_key, result)
+
+    return JSONResponse(result, headers={"X-Cache": "MISS"})
+
+
 app = Starlette(
     routes=[
         Route("/health", health, methods=["GET"]),
         Route("/v1/chat/completions", chat_completions, methods=["POST"]),
+        Route("/v1/embeddings", embeddings, methods=["POST"]),
     ]
 )

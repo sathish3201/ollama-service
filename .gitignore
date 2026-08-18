@@ -6,3 +6,10 @@ venv/
 cache.sqlite3
 cache.sqlite3-wal
 cache.sqlite3-shm
+
+# Model weights — large binaries, fetch via setup.sh / ollama pull instead
+# of committing to git (GitHub also rejects files over 100MB outright).
+models/
+
+# Runtime logs from local dev servers
+*.log
