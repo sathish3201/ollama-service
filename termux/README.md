@@ -10,14 +10,19 @@ Termux, with a quantized GGUF model, exposed via ngrok.
 |---|---|---|---|
 | **Gemma 3 1B** (default) | ~815 MB | No (text-only) | Recommended for phones — noticeably lighter on RAM, storage, and battery, still capable for RAG-style Q&A. |
 | Phi-3-mini | ~2.3 GB | No (text-only) | Larger, more capable, but meaningfully heavier to run on a phone. |
+| Qwen2.5-3B-Instruct | ~2 GB | No (text-only) | Same model + quantization (Q4_K_M) as the laptop's Ollama `qwen2.5:3b`, so phone and laptop answers should feel consistent if you use both. Ungated — no HF token needed. Heavier than Gemma 3 1B; comparable to Phi-3-mini. |
 | SmolVLM2-500M | ~546 MB | **Yes** (image + video frames) | The multimodal option that actually fits a 4GB-RAM phone. Ungated — no HF token needed. See "Multimodal: images, video, and PDFs" below. |
 
-Pass `MODEL=phi3` or `MODEL=smolvlm2` to both scripts to switch (must match
-between `setup.sh` and `start.sh`):
+Pass `MODEL=phi3`, `MODEL=qwen2.5`, or `MODEL=smolvlm2` to both scripts to
+switch (must match between `setup.sh` and `start.sh`):
 
 ```bash
 MODEL=phi3 bash setup.sh
 MODEL=phi3 bash start.sh
+
+# or:
+MODEL=qwen2.5 bash setup.sh
+MODEL=qwen2.5 bash start.sh
 
 # or:
 MODEL=smolvlm2 bash setup.sh
@@ -62,8 +67,8 @@ running setup:
    ```
 
 Without this, `setup.sh` fails with `401 Unauthorized` when downloading
-the model. (If you use `MODEL=phi3` instead, Phi-3-mini's repo isn't
-gated, so `HF_TOKEN` isn't required in that case.)
+the model. (If you use `MODEL=phi3` or `MODEL=qwen2.5` instead, neither
+repo is gated, so `HF_TOKEN` isn't required in that case.)
 
 ```bash
 bash setup.sh

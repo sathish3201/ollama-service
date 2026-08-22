@@ -16,6 +16,8 @@ set -e
 # Default: Gemma 3 1B (~815MB, lighter and faster on phones, text-only).
 # Must match whatever you passed to setup.sh, e.g.:  MODEL=phi3 bash start.sh
 #   MODEL=phi3      -> phi-3-mini, text-only, ~2.3GB
+#   MODEL=qwen2.5   -> Qwen2.5-3B-Instruct, text-only, ~2GB (matches the
+#                      laptop's Ollama qwen2.5:3b quantization)
 #   MODEL=smolvlm2  -> SmolVLM2-500M, multimodal (image + video frames), ~546MB
 MODEL="${MODEL:-gemma3-1b}"
 MMPROJ_PATH=""
@@ -23,11 +25,13 @@ if [ "$MODEL" = "gemma3-1b" ]; then
   MODEL_PATH=~/models/gemma-3-1b-it-q4_0.gguf
 elif [ "$MODEL" = "phi3" ]; then
   MODEL_PATH=~/models/Phi-3-mini-4k-instruct-q4.gguf
+elif [ "$MODEL" = "qwen2.5" ]; then
+  MODEL_PATH=~/models/qwen2.5-3b-instruct-q4_k_m.gguf
 elif [ "$MODEL" = "smolvlm2" ]; then
   MODEL_PATH=~/models/SmolVLM2-500M-Video-Instruct-Q8_0.gguf
   MMPROJ_PATH=~/models/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf
 else
-  echo "Unknown MODEL='$MODEL' — expected 'gemma3-1b', 'phi3', or 'smolvlm2'"
+  echo "Unknown MODEL='$MODEL' — expected 'gemma3-1b', 'phi3', 'qwen2.5', or 'smolvlm2'"
   exit 1
 fi
 

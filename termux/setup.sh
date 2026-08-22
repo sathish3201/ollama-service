@@ -67,9 +67,11 @@ mkdir -p ~/models
 cd ~/models
 
 # Default: Gemma 3 1B (~815MB, text-only) — lightest option. Set MODEL=phi3
-# for the larger phi-3-mini (~2.3GB, text-only), or MODEL=smolvlm2 for a
-# small multimodal (image+video-frame) model (~546MB total, ungated),
-# e.g.:  MODEL=smolvlm2 bash setup.sh
+# for the larger phi-3-mini (~2.3GB, text-only), MODEL=qwen2.5 for
+# Qwen2.5-3B-Instruct (~2GB, text-only — same model/quantization used by the
+# laptop's Ollama setup, so phone and laptop answers should feel consistent),
+# or MODEL=smolvlm2 for a small multimodal (image+video-frame) model
+# (~546MB total, ungated), e.g.:  MODEL=smolvlm2 bash setup.sh
 MODEL="${MODEL:-gemma3-1b}"
 
 if [ "$MODEL" = "gemma3-1b" ]; then
@@ -102,6 +104,15 @@ elif [ "$MODEL" = "phi3" ]; then
     wget -O Phi-3-mini-4k-instruct-q4.gguf \
       "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"
   fi
+elif [ "$MODEL" = "qwen2.5" ]; then
+  # Qwen/Qwen2.5-3B-Instruct-GGUF is ungated (no HF_TOKEN needed), unlike
+  # Gemma. Q4_K_M matches the quantization the laptop's Ollama qwen2.5:3b
+  # uses, so phone and laptop should behave similarly.
+  if [ ! -s "qwen2.5-3b-instruct-q4_k_m.gguf" ]; then
+    rm -f qwen2.5-3b-instruct-q4_k_m.gguf
+    wget -O qwen2.5-3b-instruct-q4_k_m.gguf \
+      "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf"
+  fi
 elif [ "$MODEL" = "smolvlm2" ]; then
   # SmolVLM2-500M: multimodal (image + video-frame) vision-language model.
   # Ungated, no HF_TOKEN needed. ~437MB main weights + ~109MB mmproj
@@ -118,7 +129,7 @@ elif [ "$MODEL" = "smolvlm2" ]; then
       "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
   fi
 else
-  echo "Unknown MODEL='$MODEL' — expected 'gemma3-1b', 'phi3', or 'smolvlm2'"
+  echo "Unknown MODEL='$MODEL' — expected 'gemma3-1b', 'phi3', 'qwen2.5', or 'smolvlm2'"
   exit 1
 fi
 
